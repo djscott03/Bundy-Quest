@@ -23,8 +23,11 @@ QUALITY = 80
 
 # Roster order.  Ally slots are b1.. in this order; villains are x1.. in this
 # order, so the last entry is the final boss.
-ALLY_ORDER = ["Berner", "Chip", "Decoursey", "Diaz", "Hendo", "Howe",
+ALLY_ORDER = ["Berner", "Bessy", "Chip", "Decoursey", "Diaz", "Hendo", "Howe",
               "Johnson", "Kerin", "Pancake", "Scoot", "Todje", "Wraithel"]
+
+# Files that stay out of the game entirely.
+EXCLUDE = {"Elliot:Elyn the Tranny"}   # real celebrity (Elliot Page), not one of the boys
 
 # Which look is equipped by default when someone has more than one photo.
 PREFERRED = {"Scoot": "Scoot (3)", "Diaz": "Diaz",
@@ -57,8 +60,9 @@ def stems(sub):
     out = {}
     if os.path.isdir(d):
         for f in sorted(os.listdir(d)):
-            if f.lower().endswith(EXT) and not f.startswith("."):
-                out[os.path.splitext(f)[0]] = os.path.join(d, f)
+            stem = os.path.splitext(f)[0]
+            if f.lower().endswith(EXT) and not f.startswith(".") and stem not in EXCLUDE:
+                out[stem] = os.path.join(d, f)
     return out
 
 
@@ -147,8 +151,9 @@ def main():
 
     morder = [(s, n) for s, n in MOB_ORDER if s in villains]
     vorder = [(s, n) for s, n in VILLAIN_ORDER if s in villains]
-    vorder += [(s, s.upper()) for s in sorted(villains)
-               if s not in dict(VILLAIN_ORDER) and s not in dict(MOB_ORDER)]
+    extras = [(s, s.upper()) for s in sorted(villains)
+              if s not in dict(VILLAIN_ORDER) and s not in dict(MOB_ORDER)]
+    vorder[-1:-1] = extras   # new villains slot in BEFORE the final boss — Spinz stays last
     for i, (stem, disp) in enumerate(vorder):
         k = "x%d" % (i + 1)
         bnames[k] = disp
