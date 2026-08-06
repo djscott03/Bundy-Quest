@@ -33,13 +33,18 @@ PREFERRED = {"Scoot": "Scoot (3)", "Diaz": "Diaz",
 # (filename stem, display name).  Difficulty ramps down the list; Spinz closes it.
 VILLAIN_ORDER = [
     ("Muniz' Dog",       "MUNIZ' DOG"),
-    ("Lambert",          "LAMBERT"),
-    ("Jacobs",           "JACOBS"),
     ("Tran the Trannie", "TRAN"),
     ("Lomsdale",         "LOMSDALE"),
     ("Sabado",           "SABADO"),
     ("Spinz 1.5",        "SPINZ 1.5"),
     ("Spinz",            "SPINZ"),
+]
+
+# Villains who are the rank-and-file instead of bosses — their faces ride on the
+# regular goons / slingers / brutes all game long.
+MOB_ORDER = [
+    ("Jacobs",  "JACOBS"),
+    ("Lambert", "LAMBERT"),
 ]
 
 EXT = (".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp")
@@ -140,14 +145,21 @@ def main():
         looks = " + %d more look(s)" % (len(baked[k]) - 1) if len(baked[k]) > 1 else ""
         print("  %-4s %-12s %s%s" % (k, person, os.path.basename(groups[person][0][1]), looks))
 
+    morder = [(s, n) for s, n in MOB_ORDER if s in villains]
     vorder = [(s, n) for s, n in VILLAIN_ORDER if s in villains]
-    vorder += [(s, s.upper()) for s in sorted(villains) if s not in dict(VILLAIN_ORDER)]
+    vorder += [(s, s.upper()) for s in sorted(villains)
+               if s not in dict(VILLAIN_ORDER) and s not in dict(MOB_ORDER)]
     for i, (stem, disp) in enumerate(vorder):
         k = "x%d" % (i + 1)
         bnames[k] = disp
         baked[k] = [data_url(villains[stem])]
         print("  %-4s %-12s %s%s" % (k, disp, os.path.basename(villains[stem]),
                                      "   <- FINAL BOSS" if i == len(vorder) - 1 else ""))
+    for i, (stem, disp) in enumerate(morder):
+        k = "m%d" % (i + 1)
+        bnames[k] = disp
+        baked[k] = [data_url(villains[stem])]
+        print("  %-4s %-12s %s   <- HENCHMAN" % (k, disp, os.path.basename(villains[stem])))
 
     if not baked:
         print("No images found under photos/. Nothing to do.")
@@ -164,8 +176,9 @@ def main():
             return 1
 
     # keep the slot counts in step with what actually got baked
-    html, n = re.subn(r"const ALLY_N=\d+, BOSS_N=\d+,",
-                      "const ALLY_N=%d, BOSS_N=%d," % (len(order), len(vorder)), html, count=1)
+    html, n = re.subn(r"const ALLY_N=\d+, BOSS_N=\d+, MOB_N=\d+,",
+                      "const ALLY_N=%d, BOSS_N=%d, MOB_N=%d,"
+                      % (len(order), len(vorder), len(morder)), html, count=1)
     if not n:
         print("Could not find the ALLY_N/BOSS_N line", file=sys.stderr)
         return 1
