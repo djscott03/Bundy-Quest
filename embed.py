@@ -27,7 +27,7 @@ ALLY_ORDER = ["Berner", "Bessy", "Chip", "Decoursey", "Diaz", "Hendo", "Howe",
               "Johnson", "Kerin", "Pancake", "Scoot", "Todje", "Wraithel"]
 
 # Files that stay out of the game entirely.
-EXCLUDE = {"Elliot:Elyn the Tranny"}   # real celebrity (Elliot Page), not one of the boys
+EXCLUDE = set()
 
 # Which look is equipped by default when someone has more than one photo.
 PREFERRED = {"Scoot": "Scoot (3)", "Diaz": "Diaz",
@@ -39,6 +39,7 @@ VILLAIN_ORDER = [
     ("Tran the Trannie", "TRAN"),
     ("Lomsdale",         "LOMSDALE"),
     ("Sabado",           "SABADO"),
+    ("Elliot:Elyn the Tranny", "ELYN"),   # Dylan's buddy (his call); short display name like TRAN
     ("Spinz 1.5",        "SPINZ 1.5"),
     ("Spinz",            "SPINZ"),
 ]
