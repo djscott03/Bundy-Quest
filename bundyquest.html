@@ -196,6 +196,7 @@
     <div style="height:18px"></div>
     <button class="big" id="adRevive" style="display:none;background:linear-gradient(#7fd46a,#2f7d4f);box-shadow:0 5px 0 #1a4a2a"></button>
     <button class="big" id="endMain"></button>
+    <button class="big ghost" id="shareBtn">SHARE RUN 📤</button>
     <button class="big ghost" id="endQuit">TITLE</button>
   </div>
 
@@ -533,8 +534,11 @@ function aimVy(x0,y0,sp,face){
   const tt=Math.max(0.05,bd/sp);
   return clamp(((tg.y-tg.h/2)-y0)/tt,-300,300);
 }
-function spawnHit(o,x,y,w,h,dmg,kb,src,crit){
-  G.hits.push({x:x-w/2,y:y-h,w,h,dmg,kb,src,life:.09,hitSet:new Set(),crit:!!crit});
+function spawnHit(o,x,y,w,h,dmg,kb,src,crit,who){
+  G.hits.push({x:x-w/2,y:y-h,w,h,dmg,kb,src,life:.09,hitSet:new Set(),crit:!!crit,who});
+}
+function foeName(e){
+  return e.slot?slotName(e.slot):({grub:'A GRUB',goon:'A GOON',bat:'A BAT',slinger:'A SLINGER',brute:'A BRUTE'})[e.k]||'A CREATURE';
 }
 function damage(e,dmg,kb,fromX,crit){
   if(e.inv>0||e.dead)return false;
@@ -801,12 +805,12 @@ function stepFoe(e,dt){
     if(e.atk>0){
       e.atk-=dt;e.vx*=0.86;
       if(!e.atkDid&&e.atk<0.18){e.atkDid=1;
-        spawnHit(e,e.x+e.face*(reach*.8),e.y-(d.h*.55),reach+14,d.h*.8,d.dmg,180,'e');
+        spawnHit(e,e.x+e.face*(reach*.8),e.y-(d.h*.55),reach+14,d.h*.8,d.dmg,180,'e',false,foeName(e));
         noise(.08,.09,900);}
     } else if(e.st==='charge'){
       e.stT-=dt;e.vx=e.face*d.sp*3.1;e.x+=e.vx*dt;e.walk+=dt*16;
       puff(e.x,GY-4,1,'#ffffff33',40);
-      if(Math.abs(p.x-e.x)<40){spawnHit(e,e.x+e.face*24,e.y-d.h*.6,52,d.h*.8,d.dmg+6,320,'e');e.st='idle';e.cd=1.6}
+      if(Math.abs(p.x-e.x)<40){spawnHit(e,e.x+e.face*24,e.y-d.h*.6,52,d.h*.8,d.dmg+6,320,'e',false,foeName(e));e.st='idle';e.cd=1.6}
       if(e.stT<=0){e.st='idle';e.cd=1.4}
     } else {
       if(adx>reach){e.vx+=Math.sign(dx)*700*dt;e.vx=clamp(e.vx,-d.sp,d.sp);e.walk+=dt*7}
@@ -823,7 +827,7 @@ function stepFoe(e,dt){
     e.vx=clamp(e.vx,-d.sp,d.sp);e.x+=e.vx*dt;e.walk+=Math.abs(e.vx)*dt*.05;e.y=GY;
     if(e.cd<=0&&adx<330){
       e.cd=rnd(1.5,2.4);e.atk=0.4;
-      G.shots.push({x:e.x+e.face*16,y:e.y-46,vx:e.face*300,vy:-90,r:7,dmg:d.dmg,src:'e',kind:'rock',life:3,grav:1});
+      G.shots.push({x:e.x+e.face*16,y:e.y-46,vx:e.face*300,vy:-90,r:7,dmg:d.dmg,src:'e',kind:'rock',life:3,grav:1,who:foeName(e)});
       blip(200,.1,'square',.06,120);
     }
     if(e.atk>0)e.atk-=dt;
@@ -832,7 +836,7 @@ function stepFoe(e,dt){
 }
 function touch(e,d){
   if(e.tcd>0)return;
-  if(damage(G.p,d.dmg,220,e.x)){e.tcd=0.9}
+  if(damage(G.p,d.dmg,220,e.x)){e.tcd=0.9;G.lastHit=foeName(e)}
 }
 
 /* ---------- boss ---------- */
@@ -876,7 +880,7 @@ function stepBoss(b,dt){
   else if(b.st==='swing'){
     b.stT-=dt;b.vx*=0.8;b.x+=b.vx*dt;
     if(!b.atkDid&&b.stT<0.3){b.atkDid=1;
-      spawnHit(b,b.x+b.face*54,b.y-70,92,96,20+b.phase*3,330,'e');
+      spawnHit(b,b.x+b.face*54,b.y-70,92,96,20+b.phase*3,330,'e',false,b.title);
       noise(.12,.14,700);G.shake=5}
     if(b.stT<=0)b.st='idle';
   }
@@ -886,10 +890,10 @@ function stepBoss(b,dt){
     else{
       b.y=Math.min(GY,b.y+900*dt);
       if(b.y>=GY&&!b.atkDid){b.atkDid=1;G.shake=14;noise(.25,.2,200);
-        spawnHit(b,b.x,GY-30,190,60,18+b.phase*3,280,'e');
+        spawnHit(b,b.x,GY-30,190,60,18+b.phase*3,280,'e',false,b.title);
         for(let i=0;i<24;i++)puff(b.x+rnd(-90,90),GY,1,'#ffd7a0',200);
         // shockwaves
-        [-1,1].forEach(s=>G.shots.push({x:b.x+s*40,y:GY-14,vx:s*260,vy:0,r:14,dmg:14,src:'e',kind:'wave',life:1.6}));
+        [-1,1].forEach(s=>G.shots.push({x:b.x+s*40,y:GY-14,vx:s*260,vy:0,r:14,dmg:14,src:'e',kind:'wave',life:1.6,who:b.title}));
       }
     }
     if(b.stT<=-0.3){b.st='idle';b.y=GY}
@@ -910,7 +914,7 @@ function stepBoss(b,dt){
   else if(b.st==='charge'){
     b.stT-=dt;b.vx=b.face*spd*3.4;b.x+=b.vx*dt;b.walk+=dt*18;
     puff(b.x,GY-4,1,'#ffffff44',50);
-    if(adx<48&&b.tcd<=0){if(damage(p,16+b.phase*2,340,b.x))b.tcd=0.8}
+    if(adx<48&&b.tcd<=0){if(damage(p,16+b.phase*2,340,b.x)){b.tcd=0.8;G.lastHit=b.title}}
     if(b.stT<=0)b.st='idle';
   }
   b.x=clamp(b.x,G.lockx+34,G.lockx+W-34);
@@ -950,7 +954,7 @@ function stepShots(dt){
         }
       } else {
         const p=G.p;
-        if(!p.dead&&overlap(r,box(p))){damage(p,s.dmg,200,s.x);gone=true;puff(s.x,s.y,7,'#ff8a6b',140)}
+        if(!p.dead&&overlap(r,box(p))){if(damage(p,s.dmg,200,s.x)&&s.who)G.lastHit=s.who;gone=true;puff(s.x,s.y,7,'#ff8a6b',140)}
         const a=G.ally;
         if(!gone&&a.down<=0&&overlap(r,box(a))){
           a.hp-=s.dmg;a.hurt=.2;float(a.x,a.y-a.h-4,Math.round(s.dmg),'#ff9d9d');
@@ -981,7 +985,8 @@ function stepHits(dt){
       }
     } else {
       const p=G.p;
-      if(!h.hitSet.has(p)&&!p.dead&&overlap(h,box(p))){h.hitSet.add(p);damage(p,h.dmg,h.kb,h.x+h.w/2)}
+      if(!h.hitSet.has(p)&&!p.dead&&overlap(h,box(p))){h.hitSet.add(p);
+        if(damage(p,h.dmg,h.kb,h.x+h.w/2)&&h.who)G.lastHit=h.who}
       const a=G.ally;
       if(a.down<=0&&!h.hitSet.has(a)&&overlap(h,box(a))){h.hitSet.add(a);
         a.hp-=h.dmg;a.hurt=.2;a.vx=Math.sign(a.x-h.x)*160;
@@ -1779,6 +1784,80 @@ function buildSelect(){
   }});
 }
 
+/* ---------- share card: a run summary image for the group chat ---------- */
+function runCard(){
+  const CW=720,CH=920,c=document.createElement('canvas');c.width=CW;c.height=CH;
+  const x=c.getContext('2d'), inf=G.shareInfo||{};
+  const mono='ui-monospace,Menlo,monospace';
+  // backdrop
+  const bg=x.createLinearGradient(0,0,0,CH);
+  bg.addColorStop(0,'#101024');bg.addColorStop(1,'#07070d');
+  x.fillStyle=bg;x.fillRect(0,0,CW,CH);
+  x.strokeStyle='#2a2a46';x.lineWidth=6;x.strokeRect(14,14,CW-28,CH-28);
+  // corner slashes
+  x.fillStyle='#c8283c';[[0,0,1],[CW,0,-1]].forEach(q=>{
+    x.save();x.translate(q[0],q[1]);x.scale(q[2],1);
+    for(let i=0;i<3;i++){x.fillRect(30+i*26,0,12,90-i*22)}x.restore();
+  });
+  // title
+  const tg=x.createLinearGradient(0,44,0,120);
+  tg.addColorStop(0,'#ffe9a8');tg.addColorStop(.55,'#ff9d3c');tg.addColorStop(1,'#c8383c');
+  x.fillStyle=tg;x.textAlign='center';x.font='900 66px '+mono;
+  x.fillText('BUNDY QUEST',CW/2,105);
+  x.fillStyle='#7d7da8';x.font='14px '+mono;x.letterSpacing='6px';
+  x.fillText('A TALE OF THE BOYS',CW/2,140);x.letterSpacing='0px';
+  // faces
+  function head(hx,hy,r,slot){
+    x.save();x.beginPath();x.arc(hx,hy,r,0,7);x.clip();
+    const im=imgs[slot];
+    if(im)x.drawImage(im,hx-r,hy-r,r*2,r*2);
+    else{x.fillStyle='#23233c';x.fillRect(hx-r,hy-r,r*2,r*2);
+      x.fillStyle='#7d7da8';x.font='900 '+r+'px '+mono;x.fillText(slotName(slot)[0]||'?',hx,hy+r*0.35)}
+    x.restore();
+    x.lineWidth=6;x.strokeStyle=inf.won?'#ffd35a':'#c8283c';
+    x.beginPath();x.arc(hx,hy,r,0,7);x.stroke();
+  }
+  head(CW/2,300,120,G.p.slot);
+  head(CW/2+150,380,56,G.ally.slot);
+  x.fillStyle='#e8e6f0';x.font='900 30px '+mono;
+  x.fillText(slotName(G.p.slot),CW/2,470);
+  x.fillStyle='#7d7da8';x.font='16px '+mono;
+  x.fillText(CLASSES[G.p.cls].name+'  ·  WITH '+slotName(G.ally.slot)+' THE '+CLASSES[G.ally.cls].name,CW/2,500);
+  // outcome
+  x.fillStyle=inf.won?'#ffd35a':'#ff6b7a';x.font='900 40px '+mono;
+  x.fillText(inf.line||'',CW/2,575);
+  // score
+  x.fillStyle='#ffffff';x.font='900 82px '+mono;
+  x.fillText(G.score.toLocaleString(),CW/2,680);
+  x.fillStyle='#7d7da8';x.font='16px '+mono;
+  x.fillText('SCORE  ·  '+G.st.name,CW/2,715);
+  // stats row
+  x.font='18px '+mono;x.fillStyle='#a9a9d0';
+  const bits=['BEST '+save.best.toLocaleString()];
+  if(save.spun>0)bits.push('TIMES SPUN '+save.spun);
+  x.fillText(bits.join('   ·   '),CW/2,790);
+  // footer
+  x.fillStyle='#ffb443';x.font='900 24px '+mono;
+  x.fillText('BUNDY BOYZ 4 LIFE',CW/2,860);
+  return c;
+}
+function shareRun(){
+  runCard().toBlob(async b=>{
+    if(!b)return;
+    const f=new File([b],'bundy-quest-run.png',{type:'image/png'});
+    const inf=G.shareInfo||{};
+    const txt='BUNDY QUEST — '+(inf.line||'')+' · '+G.score.toLocaleString()+' pts';
+    if(navigator.canShare&&navigator.canShare({files:[f]})){
+      try{await navigator.share({files:[f],text:txt})}catch(e){/* user cancelled */}
+    }else{
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(b);a.download='bundy-quest-run.png';a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+      toast('card saved');
+    }
+  },'image/png');
+}
+
 /* ---------- second wind: trade points for a life ---------- */
 function tryRevive(){
   const cost=G.reviveCost;
@@ -1802,6 +1881,7 @@ function endScreen(won){
   if(won){
     const lastStage=G.si>=STAGES.length-1;
     t.textContent=lastStage?'THE QUEST IS WON':'STAGE CLEAR';
+    G.shareInfo={won:true,line:lastStage?'THE QUEST IS WON':'CLEARED '+G.st.name};
     t.style.color='#ffd35a';
     b.innerHTML='<div class="statline">'+G.st.name+'</div>'+
       '<div class="statline">SCORE <span class="gold">'+G.score.toLocaleString()+'</span></div>'+
@@ -1820,6 +1900,7 @@ function endScreen(won){
     const spun=killer&&killer.slot===FINAL;
     if(spun){
       save.spun=(save.spun||0)+1;saveGame();
+      G.shareInfo={won:false,line:'SPUN BY '+killer.title.toUpperCase()};
       t.textContent='S P U N';t.style.color='#ff6b7a';
       b.innerHTML=
         '<div class="banner">'+
@@ -1830,6 +1911,8 @@ function endScreen(won){
         '<div class="statline">SCORE <span class="gold">'+G.score.toLocaleString()+'</span></div>'+
         '<div class="hint">'+slotName(sel.partner)+' is pretending they didn’t see it.</div>';
     }else{
+      G.shareInfo={won:false,line:killer?'SLAIN BY '+killer.title.toUpperCase()
+                   :(G.lastHit?'CLAPPED BY '+G.lastHit:'FELL IN '+G.st.name)};
       t.textContent='YOU FELL';t.style.color='#ff6b7a';
       b.innerHTML=(killer?'<div class="banner small"><div class="bpic">'+
           (pic(killer.slot)?'<img src="'+pic(killer.slot)+'">':'<span>?</span>')+'</div>'+
@@ -1885,6 +1968,7 @@ $('selNext').onclick=()=>{
     buildSelect();
   } else {startRun(sel.contFrom||0)}
 };
+$('shareBtn').onclick=shareRun;
 $('pResume').onclick=()=>togglePause();
 $('pQuit').onclick=()=>{S.mode='title';bestLine();showOv('title')};
 $('endQuit').onclick=()=>{S.mode='title';bestLine();showOv('title')};
