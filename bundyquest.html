@@ -237,7 +237,8 @@ for(let i=1;i<=ALLY_N;i++)SLOTS.push({k:'b'+i,kind:'ally',def:BAKED_NAMES['b'+i]
 for(let i=1;i<=BOSS_N;i++)SLOTS.push({k:'x'+i,kind:'boss',def:BAKED_NAMES['x'+i]||('VILLAIN '+i)});
 // henchmen: villains whose faces ride on the regular goons/slingers/brutes
 for(let i=1;i<=MOB_N;i++)SLOTS.push({k:'m'+i,kind:'mob',def:BAKED_NAMES['m'+i]||('HENCHMAN '+i)});
-const MOB_SLOTS=SLOTS.filter(s=>s.kind==='mob').map(s=>s.k);
+// every villain face — henchman or boss — can turn up on the rank-and-file
+const MOB_SLOTS=SLOTS.filter(s=>s.kind==='mob'||s.kind==='boss').map(s=>s.k);
 
 /* ---------- Spinz: the final boss, and an absolute menace ---------- */
 const SPINZ_TAUNTS=[
