@@ -121,6 +121,7 @@
     <div class="sub">A TALE OF THE BOYS</div>
     <div style="height:22px"></div>
     <button class="big" id="btnStart">START QUEST</button>
+    <button class="big ghost" id="btnContinue" style="display:none"></button>
     <button class="big ghost" id="btnRoster">THE BUNDYZ · ADD PHOTOS</button>
     <button class="big ghost" id="btnHow">HOW TO PLAY</button>
     <div class="hint" id="bestLine"></div>
@@ -157,7 +158,10 @@
       WARRIOR holds the line, MAGE heals you,<br>
       ARCHER shreds fast.<br><br>
       Clear every wave to open the road.<br>
-      A boss waits at the end of each land.
+      A boss waits at the end of each land.<br><br>
+      Fallen foes drop loot: hearts heal,<br>
+      ⚡ fills rage, the sword and boots are<br>
+      10 seconds of pure violence and speed.
     </div>
     <div style="height:14px"></div>
     <button class="big ghost" id="howBack">BACK</button>
@@ -190,9 +194,11 @@
     <div id="endTitle" class="sect" style="font-size:20px"></div>
     <div id="endBody" style="text-align:center"></div>
     <div style="height:18px"></div>
+    <button class="big" id="adRevive" style="display:none;background:linear-gradient(#7fd46a,#2f7d4f);box-shadow:0 5px 0 #1a4a2a"></button>
     <button class="big" id="endMain"></button>
     <button class="big ghost" id="endQuit">TITLE</button>
   </div>
+
 
   <div id="toast"></div>
   <input type="file" id="fileIn" accept="image/*">
@@ -257,6 +263,12 @@ const SPINZ_TAUNTS=[
   'SPINZ SAYS RUN IT BACK, COWARD',
   'SPINZ WASN’T EVEN LOOKING',
   'THE DRESS BLUES REMAIN UNWRINKLED'
+];
+const QUIPS=[
+  'I HAD THAT ONE','WHO BROUGHT THE MAP?','CLASSIC.','THIS IS A TUESDAY FOR US',
+  "I'M NOT CARRYING YOU",'DID EVERYONE SEE THAT?','MY ARMS ARE TIRED',
+  'WE SHOULD CHARGE FOR THIS','THAT ONE HAD YOUR NAME ON IT','IS THAT ALL OF THEM?',
+  'I CALLED DIBS ON THE LOOT','TELL SPINZ WE SAID HI','5 MORE MINUTES THEN FOOD'
 ];
 const SPINZ_PHASE=[
   'SPINZ IS WARMING UP',
@@ -461,10 +473,10 @@ let G=null;                // live game object
 function newGame(stageIdx){
   const st=STAGES[stageIdx];
   G={
-    si:stageIdx, st, camx:0, t:0, shake:0, score:(G&&G.carry)||0, carry:0,
+    si:stageIdx, st, camx:0, t:0, shake:0, score:(G&&G.carry)||0, carry:0, reviveCost:500,
     lives:3, coins:0, wave:-1, locked:false, lockx:0, cleared:false,
     bossOn:false, boss:null, foes:[], hits:[], shots:[], parts:[], floats:[], drops:[],
-    flash:0, msg:'', msgT:0, over:false, winT:0, hitStop:0,
+    flash:0, vs:0, msg:'', msgT:0, over:false, winT:0, hitStop:0,
     p:mkPlayer(), ally:mkAlly()
   };
   G.p.x=60; G.ally.x=20;
@@ -473,7 +485,7 @@ function mkPlayer(){
   const hp=CLS_HP[sel.myCls]||120;
   return {t:'player',cls:sel.myCls,x:60,y:GY,vx:0,vy:0,w:34,h:76,face:1,hp,mhp:hp,rage:0,
           onG:true,atk:0,atkStage:0,atkDid:0,cd:0,inv:1,hurt:0,guard:0,
-          walk:0,spin:0,nova:0,combo:0,comboT:0,dead:0,slot:sel.warrior}
+          walk:0,spin:0,nova:0,buffP:0,buffB:0,combo:0,comboT:0,dead:0,slot:sel.warrior}
 }
 function mkAlly(){
   return {t:'ally',cls:sel.cls,x:20,y:GY,vx:0,vy:0,w:32,h:72,face:1,hp:80,mhp:80,
@@ -491,7 +503,7 @@ function puff(x,y,n,col,sp){
   for(let i=0;i<n;i++)G.parts.push({x,y,vx:rnd(-sp,sp),vy:rnd(-sp,sp*.5),life:rnd(.25,.6),
     m:rnd(.25,.6),r:rnd(2,5),c:col,g:1});
 }
-function float(x,y,txt,col,big){G.floats.push({x,y,txt,c:col,life:.85,m:.85,big:!!big})}
+function float(x,y,txt,col,big,life){const l=life||.85;G.floats.push({x,y,txt,c:col,life:l,m:l,big:!!big})}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.opacity=1;
   clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,1700)}
 function msg(m,d){G.msg=m;G.msgT=d||2}
@@ -499,6 +511,7 @@ function msg(m,d){G.msg=m;G.msgT=d||2}
 /* ============================================================
    COMBAT
    ============================================================ */
+function pmul(d){return G.p.buffP>0?Math.round(d*1.6):d}
 /* vertical speed that lands a straight shot on the nearest foe ahead (0 if none) */
 function aimVy(x0,y0,sp,face){
   let tg=null,bd=1e9;
@@ -546,7 +559,11 @@ function kill(e){
   const d=EDEF[e.k];G.score+=d.sc;G.combo=0;
   puff(e.x,e.y-e.h*.5,14,d.c1,190);
   float(e.x,e.y-e.h-8,'+'+d.sc,'#ffd35a');
-  if(Math.random()<0.22)G.drops.push({x:e.x,y:e.y-20,vy:-160,kind:Math.random()<.4?'heart':'coin',life:12});
+  if(Math.random()<0.30){
+    const r=Math.random();
+    const kind=r<.38?'coin':r<.58?'heart':r<.74?'rage':r<.89?'power':'boots';
+    G.drops.push({x:e.x,y:e.y-20,vy:-160,kind,life:12});
+  }
   G.foes.splice(G.foes.indexOf(e),1);
 }
 
@@ -555,6 +572,7 @@ function stepPlayer(dt){
   const p=G.p;
   if(p.dead){p.vy+=1500*dt;p.y+=p.vy*dt;return}
   p.inv=Math.max(0,p.inv-dt);p.hurt=Math.max(0,p.hurt-dt);p.cd=Math.max(0,p.cd-dt);
+  p.buffP=Math.max(0,p.buffP-dt);p.buffB=Math.max(0,p.buffB-dt);
   p.comboT=Math.max(0,p.comboT-dt);if(p.comboT<=0)p.combo=0;
 
   p.guard = (keys.down&&p.onG&&p.atk<=0&&p.spin<=0)?1:0;
@@ -565,7 +583,7 @@ function stepPlayer(dt){
     if(keys.left)ax=-1;if(keys.right)ax=1;
     if(ax){p.face=ax;p.vx+=ax*2100*dt}
   }
-  const spd=p.spin>0?330:230;
+  const spd=(p.spin>0?330:230)*(p.buffB>0?1.35:1);
   p.vx=clamp(p.vx,-spd,spd);
   if(!ax||!canMove)p.vx*= p.onG?0.80:0.94;
   if(Math.abs(p.vx)<4)p.vx=0;
@@ -591,13 +609,13 @@ function stepPlayer(dt){
       if(p.onG)p.vx+=p.face*110;
     }else if(p.cls==='mage'){
       p.atk=0.26;p.atkDid=1;p.cd=0.55;
-      G.shots.push({x:p.x+p.face*20,y:p.y-46,vx:p.face*300,vy:0,r:9,dmg:15,src:'p',
+      G.shots.push({x:p.x+p.face*20,y:p.y-46,vx:p.face*300,vy:0,r:9,dmg:pmul(15),src:'p',
                     kind:'bolt',life:2.2,hom:1});
       blip(520,.16,'sine',.08,900);
     }else{
       p.atk=0.18;p.atkDid=1;p.cd=0.26;
       const x0=p.x+p.face*20,y0=p.y-46;
-      G.shots.push({x:x0,y:y0,vx:p.face*540,vy:aimVy(x0,y0,540,p.face),r:5,dmg:8,src:'p',
+      G.shots.push({x:x0,y:y0,vx:p.face*540,vy:aimVy(x0,y0,540,p.face),r:5,dmg:pmul(8),src:'p',
                     kind:'arrow',life:1.5,mark:1});
       blip(760,.06,'square',.06,420);
     }
@@ -610,7 +628,7 @@ function stepPlayer(dt){
       const st=p.atkStage, dmg=st===3?24:13, kb=st===3?330:150;
       const airBonus=!p.onG?4:0;
       // hitbox reaches the ground so knee-high foes (grubs) aren't swung over
-      spawnHit(p,p.x+p.face*34,p.y-2,58,78,dmg+airBonus,kb,'p',st===3);
+      spawnHit(p,p.x+p.face*34,p.y-2,58,78,pmul(dmg+airBonus),kb,'p',st===3);
       if(st===3){G.shake=5;puff(p.x+p.face*40,p.y-40,10,'#ffe9a8',180)}
     }
   }
@@ -623,20 +641,20 @@ function stepPlayer(dt){
     }else if(p.cls==='mage'){
       p.nova=0.45;p.inv=Math.max(p.inv,0.6);msg('ARCANE NOVA!',1);
       const all=G.foes.slice().concat(G.boss&&!G.boss.dead?[G.boss]:[]);
-      all.forEach(f=>{if(Math.abs(f.x-p.x)<150&&f.y-f.h/2>p.y-170)damage(f,26,340,p.x,true)});
+      all.forEach(f=>{if(Math.abs(f.x-p.x)<150&&f.y-f.h/2>p.y-170)damage(f,pmul(26),340,p.x,true)});
       for(let i=0;i<26;i++){const a=i/26*6.28;
         G.parts.push({x:p.x,y:p.y-40,vx:Math.cos(a)*260,vy:Math.sin(a)*160,life:.5,m:.5,r:4,c:'#b79bff',g:0})}
     }else{
       msg('ARROW STORM!',1);
       for(let i=-3;i<=3;i++)
-        G.shots.push({x:p.x+p.face*20,y:p.y-50,vx:p.face*500,vy:i*70,r:5,dmg:10,src:'p',
+        G.shots.push({x:p.x+p.face*20,y:p.y-50,vx:p.face*500,vy:i*70,r:5,dmg:pmul(10),src:'p',
                       kind:'arrow',life:1.5,mark:1});
     }
   } else if(edge.b){edge.b=0;if(p.rage<40){float(p.x,p.y-p.h-10,'NO RAGE','#7d7da8')}}
   if(p.spin>0){
     p.spin-=dt;
     if(Math.floor(p.spin*14)!==Math.floor((p.spin+dt)*14))
-      spawnHit(p,p.x,p.y-2,110,86,9,240,'p',false);
+      spawnHit(p,p.x,p.y-2,110,86,pmul(9),240,'p',false);
     puff(p.x+rnd(-30,30),p.y-rnd(10,66),1,'#ffd35a',60);
   }
   p.nova=Math.max(0,p.nova-dt);
@@ -646,6 +664,9 @@ function stepPlayer(dt){
     const d=G.drops[i];
     if(Math.abs(d.x-p.x)<32&&Math.abs(d.y-(p.y-30))<44){
       if(d.kind==='heart'){p.hp=Math.min(p.mhp,p.hp+25);float(p.x,p.y-p.h-8,'+25 HP','#7fd46a');SFX.heal()}
+      else if(d.kind==='rage'){p.rage=Math.min(100,p.rage+50);float(p.x,p.y-p.h-8,'+50 RAGE','#ffd35a');SFX.special()}
+      else if(d.kind==='power'){p.buffP=10;float(p.x,p.y-p.h-8,'POWER UP!','#ff8a6b');SFX.coin()}
+      else if(d.kind==='boots'){p.buffB=10;float(p.x,p.y-p.h-8,'SPEED UP!','#8ad6ff');SFX.coin()}
       else{G.coins++;G.score+=50;float(p.x,p.y-p.h-8,'+50','#ffd35a');SFX.coin()}
       G.drops.splice(i,1);
     }
@@ -672,6 +693,14 @@ function stepAlly(dt){
     if(a.down<=0){a.hp=a.mhp;a.x=p.x-40*p.face;msg(slotName(a.slot)+' IS BACK!',1.6);SFX.heal()}
     return;
   }
+  // the occasional word of encouragement
+  a.quipT=(a.quipT===undefined?6:a.quipT)-dt;
+  if(a.quipT<=0){
+    a.quipT=rnd(11,18);
+    if(Math.random()<0.6&&G.vs<=0)
+      float(a.x,a.y-a.h-18,slotName(a.slot)+': '+QUIPS[Math.floor(Math.random()*QUIPS.length)],'#cfcfe6',false,2.2);
+  }
+
   // target nearest visible foe
   a.cd-=dt;a.cast=Math.max(0,a.cast-dt);
   let tgt=null,bd=1e9;
@@ -798,10 +827,15 @@ function touch(e,d){
 /* ---------- boss ---------- */
 function spawnBoss(){
   const st=G.st;
+  // any villain can turn up MEGA-sized; the real Spinz always holds the last keep
+  const finalStage=G.si>=STAGES.length-1;
+  const slot=finalStage?FINAL:MOB_SLOTS[Math.floor(Math.random()*MOB_SLOTS.length)];
+  const title=finalStage?slotName(slot):'MEGA '+slotName(slot);
   const b={t:'boss',x:G.camx+W-70,y:GY,vx:0,vy:0,w:64,h:126,face:-1,
            hp:520+G.si*230,mhp:520+G.si*230,inv:0,hurt:0,dead:0,walk:0,
-           st:'idle',stT:1.2,cd:1.4,atk:0,atkDid:0,phase:1,slot:st.boss,title:slotName(st.boss),tcd:0};
-  G.boss=b;G.bossOn=true;SFX.boss();msg(b.title.toUpperCase(),2.4);G.shake=12;
+           st:'idle',stT:1.2,cd:1.4,atk:0,atkDid:0,phase:1,slot,title,tcd:0};
+  G.boss=b;G.bossOn=true;SFX.boss();G.shake=12;
+  G.vs=2.6;G.hitStop=Math.max(G.hitStop,1.15);   // freeze-frame for the VS card
   return b;
 }
 function stepBoss(b,dt){
@@ -986,6 +1020,7 @@ function stepWorld(dt){
     if(q.g)q.vy+=700*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;if(q.life<=0)G.parts.splice(i,1)}
   for(let i=G.floats.length-1;i>=0;i--){const f=G.floats[i];f.life-=dt;f.y-=34*dt;if(f.life<=0)G.floats.splice(i,1)}
   G.shake*=Math.pow(0.03,dt);G.flash=Math.max(0,G.flash-dt*2.4);
+  if(G.vs>0)G.vs-=dt;
   if(G.msgT>0)G.msgT-=dt;
 
   if(G.cleared){
@@ -1439,13 +1474,29 @@ function drawFX(){
   ctx.globalAlpha=1;
   G.drops.forEach(d=>{
     const x=d.x-G.camx,bob=Math.sin(G.t*6+d.x)*3;
+    const dy=d.y+bob;
     if(d.kind==='heart'){
       ctx.fillStyle='#ff5a7a';ctx.beginPath();
-      ctx.arc(x-4,d.y+bob-4,5,0,7);ctx.arc(x+4,d.y+bob-4,5,0,7);
-      ctx.moveTo(-9+x,d.y+bob-2);ctx.lineTo(x,d.y+bob+9);ctx.lineTo(x+9,d.y+bob-2);ctx.fill();
+      ctx.arc(x-4,dy-4,5,0,7);ctx.arc(x+4,dy-4,5,0,7);
+      ctx.moveTo(-9+x,dy-2);ctx.lineTo(x,dy+9);ctx.lineTo(x+9,dy-2);ctx.fill();
+    }else if(d.kind==='rage'){
+      ctx.fillStyle='#ffd35a';ctx.beginPath();
+      ctx.moveTo(x+3,dy-11);ctx.lineTo(x-6,dy+1);ctx.lineTo(x-1,dy+1);ctx.lineTo(x-3,dy+11);
+      ctx.lineTo(x+6,dy-2);ctx.lineTo(x+1,dy-2);ctx.closePath();ctx.fill();
+      ctx.fillStyle='#ffd35a33';ctx.beginPath();ctx.arc(x,dy,11,0,7);ctx.fill();
+    }else if(d.kind==='power'){
+      ctx.save();ctx.translate(x,dy);ctx.rotate(-0.6);
+      ctx.fillStyle='#c9d2e4';ctx.fillRect(-2,-11,4,16);
+      ctx.fillStyle='#ff8a6b';ctx.fillRect(-6,3,12,3.5);ctx.fillRect(-1.8,6,3.6,6);
+      ctx.restore();
+      ctx.fillStyle='#ff8a6b33';ctx.beginPath();ctx.arc(x,dy,11,0,7);ctx.fill();
+    }else if(d.kind==='boots'){
+      ctx.fillStyle='#8ad6ff';
+      ctx.fillRect(x-6,dy-8,5,12);ctx.fillRect(x-6,dy+1,10,4);
+      ctx.fillStyle='#8ad6ff33';ctx.beginPath();ctx.arc(x,dy,11,0,7);ctx.fill();
     }else{
-      ctx.fillStyle='#ffd35a';ctx.beginPath();ctx.ellipse(x,d.y+bob,6,8,0,0,7);ctx.fill();
-      ctx.fillStyle='#c9932a';ctx.beginPath();ctx.ellipse(x,d.y+bob,3,5,0,0,7);ctx.fill();
+      ctx.fillStyle='#ffd35a';ctx.beginPath();ctx.ellipse(x,dy,6,8,0,0,7);ctx.fill();
+      ctx.fillStyle='#c9932a';ctx.beginPath();ctx.ellipse(x,dy,3,5,0,0,7);ctx.fill();
     }
   });
   ctx.textAlign='center';
@@ -1479,6 +1530,12 @@ function drawHUD(){
     ctx.beginPath();ctx.arc(hx-3,hy-2,3.4,0,7);ctx.arc(hx+3,hy-2,3.4,0,7);
     ctx.moveTo(hx-6.4,hy);ctx.lineTo(hx,hy+7);ctx.lineTo(hx+6.4,hy);ctx.fill();
   }
+  // active buff pips
+  let bx=176;
+  if(p.buffP>0){ctx.fillStyle='#ff8a6b';ctx.font='bold 9px ui-monospace,monospace';ctx.textAlign='left';
+    ctx.fillText('PWR '+Math.ceil(p.buffP),bx,40);bx+=44}
+  if(p.buffB>0){ctx.fillStyle='#8ad6ff';ctx.font='bold 9px ui-monospace,monospace';ctx.textAlign='left';
+    ctx.fillText('SPD '+Math.ceil(p.buffB),bx,40)}
   // ally
   ctx.globalAlpha=a.down>0?0.4:1;
   drawHead(26,58,13,a.slot,1,null);
@@ -1518,6 +1575,27 @@ function drawHUD(){
   ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(W/2-70,H-8,140,3);
   ctx.fillStyle=G.st.acc;ctx.fillRect(W/2-70,H-8,140*prog,3);
 
+  // VS card — freeze-frame face-off when a boss shows up
+  if(G.vs>0&&G.boss){
+    const al=Math.min(1,G.vs/0.5), slide=Math.min(1,(2.6-G.vs)*4);
+    ctx.globalAlpha=al*0.82;
+    ctx.fillStyle='#07070d';ctx.fillRect(0,140,W,190);
+    ctx.globalAlpha=al;
+    ctx.fillStyle='#c8283c';ctx.fillRect(0,140,W,4);ctx.fillRect(0,326,W,4);
+    const px=-90+slide*(W*0.28+90), bx=W+90-slide*(W+90-W*0.72);
+    drawHead(px,215,42,G.p.slot,1,null);
+    drawHead(bx,215,46,G.boss.slot,1,null);
+    ctx.textAlign='center';
+    ctx.font='900 34px ui-monospace,monospace';
+    ctx.fillStyle='#000';ctx.fillText('VS',W/2+2,232+2);
+    ctx.fillStyle='#ffd35a';ctx.fillText('VS',W/2,232);
+    ctx.font='bold 12px ui-monospace,monospace';
+    ctx.fillStyle='#cfe0ff';ctx.fillText(slotName(G.p.slot),px,285);
+    ctx.fillStyle='#ff9d9d';ctx.fillText(G.boss.title.toUpperCase(),bx,285);
+    ctx.font='8px ui-monospace,monospace';ctx.fillStyle='#7d7da8';
+    ctx.fillText(G.st.name,W/2,315);
+    ctx.globalAlpha=1;
+  }
   // message
   if(G.msgT>0){
     const al=Math.min(1,G.msgT*2);
@@ -1594,8 +1672,16 @@ function showOv(name){
 function bestLine(){
   document.getElementById('bestLine').innerHTML =
     save.best>0 ? 'BEST SCORE <span class="gold">'+save.best.toLocaleString()+'</span>' : 'Tap THE BUNDYZ to add your boys.';
+  const c=document.getElementById('btnContinue');
+  const si=Math.min(save.stage-1,STAGES.length-1);
+  if(save.stage>1){c.style.display='';c.textContent='CONTINUE · '+STAGES[si].name}
+  else c.style.display='none';
 }
 bestLine();
+document.getElementById('btnContinue').onclick=()=>{
+  sel.step=0;buildSelect();showOv('select');ac();
+  sel.contFrom=Math.min(save.stage-1,STAGES.length-1);
+};
 
 /* ---------- roster screen ---------- */
 function cardHTML(k,extra){
@@ -1682,12 +1768,26 @@ function buildSelect(){
   }});
 }
 
+/* ---------- second wind: trade points for a life ---------- */
+function tryRevive(){
+  const cost=G.reviveCost;
+  G.score=Math.max(0,G.score-Math.min(cost,G.score));
+  G.reviveCost=cost*2;
+  G.lives=1;
+  const p=G.p;p.dead=0;p.hp=p.mhp;p.rage=50;p.y=GY;p.vy=0;p.inv=3.2;
+  G.foes.length=0;                       // clear the room (boss stays)
+  const a=G.ally;a.down=0;a.hp=a.mhp;
+  G.over=false;S.mode='play';showOv(null);last=performance.now();acc=0;
+  msg('BACK ON YOUR FEET',1.8);SFX.heal();
+}
+
 /* ---------- end screen ---------- */
 function endScreen(won){
   S.mode='end';
   const t=document.getElementById('endTitle'),b=document.getElementById('endBody'),
         m=document.getElementById('endMain');
   if(G.score>save.best){save.best=G.score;saveGame()}
+  document.getElementById('adRevive').style.display='none';
   if(won){
     const lastStage=G.si>=STAGES.length-1;
     t.textContent=lastStage?'THE QUEST IS WON':'STAGE CLEAR';
@@ -1729,6 +1829,10 @@ function endScreen(won){
         '<div class="hint">'+slotName(sel.partner)+' drags you back to the last camp.</div>';
     }
     m.textContent=spun?'RUN IT BACK':'RETRY STAGE';
+    const ar=document.getElementById('adRevive');
+    ar.style.display='';
+    ar.textContent='SECOND WIND · +1 LIFE (\u2212'+Math.min(G.reviveCost,G.score).toLocaleString()+' PTS)';
+    ar.onclick=tryRevive;
     m.onclick=()=>{const si=G.si;newGame(si);S.mode='play';showOv(null)};
   }
   showOv('end');
@@ -1751,7 +1855,7 @@ function togglePause(force){
 
 /* ---------- wire buttons ---------- */
 const $=id=>document.getElementById(id);
-$('btnStart').onclick=()=>{sel.step=0;buildSelect();showOv('select');ac()};
+$('btnStart').onclick=()=>{sel.contFrom=0;sel.step=0;buildSelect();showOv('select');ac()};
 $('btnRoster').onclick=()=>{buildRoster();showOv('roster')};
 $('rosterBack').onclick=()=>showOv('title');
 $('rosterReset').onclick=()=>{
@@ -1768,7 +1872,7 @@ $('selNext').onclick=()=>{
     if(sel.step===3&&sel.partner===sel.warrior)
       sel.partner=SLOTS.find(s=>s.kind==='ally'&&s.k!==sel.warrior).k;
     buildSelect();
-  } else {startRun(0)}
+  } else {startRun(sel.contFrom||0)}
 };
 $('pResume').onclick=()=>togglePause();
 $('pQuit').onclick=()=>{S.mode='title';bestLine();showOv('title')};
