@@ -111,6 +111,7 @@
     <div id="meta">
       <button class="mbtn" id="mPause">PAUSE</button>
       <button class="mbtn" id="mMute">SOUND</button>
+      <button class="mbtn" id="mMusic">BEAT</button>
     </div>
   </div>
 
@@ -246,6 +247,8 @@ for(let i=1;i<=BOSS_N;i++)SLOTS.push({k:'x'+i,kind:'boss',def:BAKED_NAMES['x'+i]
 for(let i=1;i<=MOB_N;i++)SLOTS.push({k:'m'+i,kind:'mob',def:BAKED_NAMES['m'+i]||('HENCHMAN '+i)});
 // every villain face — henchman or boss — can turn up on the rank-and-file
 const MOB_SLOTS=SLOTS.filter(s=>s.kind==='mob'||s.kind==='boss').map(s=>s.k);
+// Sabado brings his home turf with him (keyed off the baked name so renames don't break it)
+const SAB_SLOT=Object.keys(BAKED_NAMES).find(k=>BAKED_NAMES[k]==='SABADO');
 
 /* ---------- Spinz: the final boss, and an absolute menace ---------- */
 const SPINZ_TAUNTS=[
@@ -391,6 +394,47 @@ const SFX={
   block:()=>{blip(600,.08,'square',.10,300);noise(.06,.10,2000)},
   heal:()=>{[660,880,1100].forEach((f,i)=>setTimeout(()=>blip(f,.16,'sine',.10),i*70))}
 };
+
+/* ============================================================
+   MUSIC — an original trap loop, all synth, no samples.
+   Booming 808s, rolling hats, dark bells. 138 BPM, 2-bar loop
+   scheduled a beat ahead so it never stutters mid-brawl.
+   ============================================================ */
+let musicOn=true, musNext=0, musStep=0, mNzBuf=null;
+const MSPB=60/138/4;                        // one 16th note
+const M8N ={0:65.41,6:65.41,10:77.78,16:65.41,22:58.27,25:65.41,28:49.00};   // C2/Eb2/Bb1/G1
+const MBL ={0:523.25,3:466.16,8:392.00,12:311.13,16:523.25,19:466.16,24:415.30,28:311.13};
+function mNz(){const a=AC;if(!mNzBuf){const n=a.sampleRate*0.3|0;mNzBuf=a.createBuffer(1,n,a.sampleRate);
+  const c=mNzBuf.getChannelData(0);for(let i=0;i<n;i++)c[i]=Math.random()*2-1}return mNzBuf}
+function m808(t,f){const a=AC,o=a.createOscillator(),g=a.createGain();
+  o.type='sine';o.frequency.setValueAtTime(f*2.4,t);o.frequency.exponentialRampToValueAtTime(f,t+0.055);
+  g.gain.setValueAtTime(0.42,t);g.gain.setValueAtTime(0.36,t+0.28);g.gain.exponentialRampToValueAtTime(0.001,t+0.5);
+  o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+0.52)}
+function mSnare(t){const a=AC,s=a.createBufferSource();s.buffer=mNz();
+  const f=a.createBiquadFilter();f.type='highpass';f.frequency.value=1800;
+  const g=a.createGain();g.gain.setValueAtTime(0.22,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.16);
+  s.connect(f);f.connect(g);g.connect(a.destination);s.start(t);s.stop(t+0.18)}
+function mHat(t,open){const a=AC,s=a.createBufferSource();s.buffer=mNz();
+  const f=a.createBiquadFilter();f.type='highpass';f.frequency.value=7500;
+  const g=a.createGain();g.gain.setValueAtTime(open?0.12:0.09,t);
+  g.gain.exponentialRampToValueAtTime(0.001,t+(open?0.22:0.045));
+  s.connect(f);f.connect(g);g.connect(a.destination);s.start(t);s.stop(t+(open?0.24:0.06))}
+function mBell(t,f){const a=AC;[f,f*1.006].forEach(fr=>{const o=a.createOscillator(),g=a.createGain();
+  o.type='triangle';o.frequency.value=fr;
+  g.gain.setValueAtTime(0.07,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.5);
+  o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+0.52)})}
+function musStepPlay(s,t){
+  if(M8N[s]!==undefined)m808(t,M8N[s]);
+  if(s===8||s===24)mSnare(t);
+  if(s%2===0)mHat(t,s===22);
+  if(s===15||s===31){mHat(t);mHat(t+MSPB/2)}      // the roll
+  if(MBL[s])mBell(t,MBL[s]);
+}
+setInterval(()=>{
+  const a=AC;if(!a)return;
+  if(!musicOn||muted||S.mode!=='play'){musNext=a.currentTime+0.12;return}
+  while(musNext<a.currentTime+0.28){musStepPlay(musStep%32,musNext);musNext+=MSPB;musStep++}
+},90);
 
 /* ============================================================
    INPUT
@@ -851,6 +895,7 @@ function spawnBoss(){
            st:'idle',stT:1.2,cd:1.4,atk:0,atkDid:0,phase:1,slot,title,tcd:0};
   G.boss=b;G.bossOn=true;SFX.boss();G.shake=12;
   G.vs=2.6;G.hitStop=Math.max(G.hitStop,1.15);   // freeze-frame for the VS card
+  if(slot===SAB_SLOT)msg("WELCOME TO DENNY'S",4.5);  // outlasts the VS card
   return b;
 }
 function stepBoss(b,dt){
@@ -872,7 +917,7 @@ function stepBoss(b,dt){
       const r=Math.random();
       if(adx<110){b.st='swing';b.stT=0.62;b.atkDid=0}
       else if(r<0.42){b.st='slam';b.stT=0.9;b.atkDid=0}
-      else if(r<0.75&&b.phase>1){b.st='summon';b.stT=0.8;b.atkDid=0}
+      else if(r<0.75&&b.phase>1&&G.foes.length<5){b.st='summon';b.stT=0.8;b.atkDid=0}
       else {b.st='charge';b.stT=1.05}
       b.cd=Math.max(0.9,2.4-b.phase*0.35);
     }
@@ -902,7 +947,10 @@ function stepBoss(b,dt){
     b.stT-=dt;
     if(!b.atkDid&&b.stT<0.4){b.atkDid=1;
       const kinds=['grub','bat','goon'];
-      for(let i=0;i<1+b.phase;i++){
+      // never flood the arena — endless summons used to pile up hundreds of
+      // minions over a long fight and grind phones to a halt
+      const room=Math.max(0,6-G.foes.length);
+      for(let i=0;i<Math.min(1+b.phase,room);i++){
         const k=kinds[Math.floor(Math.random()*kinds.length)];
         const e=spawnFoe(k,b.x+rnd(-70,70));
         puff(e.x,GY-10,12,'#d78fff',160);
@@ -1075,6 +1123,8 @@ function drawBG(){
     ctx.beginPath();ctx.moveTo(bx,GY+16);
     ctx.quadraticCurveTo(bx+90,GY-150-((i*37)%60),bx+200,GY+16);ctx.closePath();ctx.fill();
   }
+  // Sabado fights happen in front of his castle (Dylan's ask: "Denny's logo on a castle")
+  if(G.boss&&!G.boss.dead&&G.boss.slot===SAB_SLOT)drawDennys(W*0.60,GY+10);
   // mid decoration
   for(let i=0;i<14;i++){
     const bx=((i*180-cx*0.45)%2520+2520)%2520-140;
@@ -1112,6 +1162,43 @@ function drawDeco(kind,x,y,s,col){
     ctx.beginPath();ctx.arc(0,-104,12,0,7);ctx.fill();
     ctx.fillStyle='rgba(255,140,40,.45)';ctx.beginPath();ctx.arc(0,-108,16,0,7);ctx.fill();
   }
+  ctx.restore();
+}
+
+/* Sabado's keep: a stone castle flying a parody diner sign, open 24 hrs */
+function drawDennys(x,y){
+  ctx.save();ctx.translate(x,y);
+  // warm glow spilling out behind the sign
+  ctx.fillStyle='rgba(255,210,63,'+(0.06+0.03*Math.sin(G.t*3))+')';
+  ctx.beginPath();ctx.arc(0,-210,120,0,7);ctx.fill();
+  // towers + keep
+  ctx.fillStyle='#34344c';
+  ctx.fillRect(-104,-128,34,128);ctx.fillRect(70,-128,34,128);
+  ctx.fillStyle='#3d3d58';ctx.fillRect(-72,-150,144,150);
+  // crenellations
+  for(let i=0;i<6;i++)ctx.fillRect(-72+i*26,-162,15,13);
+  ctx.fillStyle='#2a2a40';
+  ctx.fillRect(-104,-140,34,7);ctx.fillRect(70,-140,34,7);
+  // tower roofs
+  ctx.fillStyle='#5a2a3a';
+  ctx.beginPath();ctx.moveTo(-108,-140);ctx.lineTo(-87,-176);ctx.lineTo(-66,-140);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(66,-140);ctx.lineTo(87,-176);ctx.lineTo(108,-140);ctx.closePath();ctx.fill();
+  // gate
+  ctx.fillStyle='#191926';
+  ctx.beginPath();ctx.moveTo(-22,0);ctx.lineTo(-22,-28);ctx.arc(0,-28,22,Math.PI,0);ctx.lineTo(22,0);ctx.closePath();ctx.fill();
+  // lit windows
+  ctx.fillStyle='#ffd23f';
+  ctx.fillRect(-50,-120,10,14);ctx.fillRect(40,-120,10,14);ctx.fillRect(-5,-96,10,14);
+  ctx.fillRect(-92,-100,9,12);ctx.fillRect(83,-100,9,12);
+  // 24-hour promise on the wall
+  ctx.textAlign='center';ctx.font='bold 9px ui-monospace,monospace';
+  ctx.fillStyle='#ffd23f';ctx.fillText('OPEN 24 HRS',0,-62);
+  // the sign itself: yellow slab on a pole, red script
+  ctx.fillStyle='#8a8a9a';ctx.fillRect(-4,-198,8,38);
+  ctx.fillStyle='#ffd23f';roundRect(-62,-240,124,46,10);ctx.fill();
+  ctx.strokeStyle='#e03a2f';ctx.lineWidth=3;roundRect(-62,-240,124,46,10);ctx.stroke();
+  ctx.fillStyle='#e03a2f';ctx.font='italic 900 26px Georgia,serif';
+  ctx.fillText("Denny's",0,-206);
   ctx.restore();
 }
 
@@ -1385,12 +1472,18 @@ function drawFoe(e){
     if(!(e.slot&&imgs[e.slot])){
       ctx.fillStyle=hurt?'#fff':'#d8c0a0';ctx.beginPath();ctx.arc(0,hy,hr,0,7);ctx.fill();
       ctx.fillStyle='#a83232';ctx.beginPath();ctx.arc(hr*0.35,hy-1,2.8,0,7);ctx.arc(-hr*0.4,hy-1,2.8,0,7);ctx.fill();
+      if(e.k==='slinger'){ctx.fillStyle=c1;ctx.beginPath();ctx.arc(0,hy-2,hr+3,Math.PI*1.05,Math.PI*1.95);ctx.closePath();ctx.fill()}
+      else if(e.k==='brute'){ctx.fillStyle='#5a4a2a';ctx.fillRect(-hr,hy-hr+2,hr*2,7);
+        ctx.fillStyle='#e8e0c0';ctx.beginPath();ctx.moveTo(-6,hy+6);ctx.lineTo(-4,hy+14);ctx.lineTo(-1,hy+6);ctx.fill();
+        ctx.beginPath();ctx.moveTo(6,hy+6);ctx.lineTo(4,hy+14);ctx.lineTo(1,hy+6);ctx.fill()}
+      else{ctx.fillStyle=c2;ctx.beginPath();ctx.arc(0,hy-4,hr,Math.PI,0);ctx.fill()}
+    }else{
+      // photo head: headgear stays a slim cap above the brow so the villain's
+      // face (the whole joke) is never covered — and no fangs over the chin
+      if(e.k==='slinger'){ctx.fillStyle=c1;ctx.beginPath();ctx.arc(0,hy-hr*0.5,hr*0.9,Math.PI*1.02,Math.PI*1.98);ctx.closePath();ctx.fill()}
+      else if(e.k==='brute'){ctx.fillStyle='#5a4a2a';ctx.fillRect(-hr*0.95,hy-hr+1,hr*1.9,6)}
+      else{ctx.fillStyle=c2;ctx.beginPath();ctx.arc(0,hy-hr*0.45,hr*0.8,Math.PI,0);ctx.fill()}
     }
-    if(e.k==='slinger'){ctx.fillStyle=c1;ctx.beginPath();ctx.arc(0,hy-2,hr+3,Math.PI*1.05,Math.PI*1.95);ctx.closePath();ctx.fill()}
-    else if(e.k==='brute'){ctx.fillStyle='#5a4a2a';ctx.fillRect(-hr,hy-hr+2,hr*2,7);
-      ctx.fillStyle='#e8e0c0';ctx.beginPath();ctx.moveTo(-6,hy+6);ctx.lineTo(-4,hy+14);ctx.lineTo(-1,hy+6);ctx.fill();
-      ctx.beginPath();ctx.moveTo(6,hy+6);ctx.lineTo(4,hy+14);ctx.lineTo(1,hy+6);ctx.fill()}
-    else{ctx.fillStyle=c2;ctx.beginPath();ctx.arc(0,hy-4,hr,Math.PI,0);ctx.fill()}
     ctx.restore();
   }
   ctx.restore();
@@ -1974,6 +2067,7 @@ $('pQuit').onclick=()=>{S.mode='title';bestLine();showOv('title')};
 $('endQuit').onclick=()=>{S.mode='title';bestLine();showOv('title')};
 $('mPause').onclick=()=>togglePause();
 $('mMute').onclick=()=>{muted=!muted;$('mMute').textContent=muted?'MUTED':'SOUND';if(!muted)SFX.coin()};
+$('mMusic').onclick=()=>{musicOn=!musicOn;$('mMusic').textContent=musicOn?'BEAT':'NO BEAT';ac()};
 
 /* testing handle */
 window.BQ={S,get G(){return G},sel,SLOTS,photos,names,STAGES,EDEF,
