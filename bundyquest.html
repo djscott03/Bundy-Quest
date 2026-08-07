@@ -604,6 +604,9 @@ function damage(e,dmg,kb,fromX,crit){
   return true;
 }
 function kill(e){
+  // the player's death runs through stepPlayer's own sequence — falling through
+  // to the foe branch here threw (no EDEF entry) and froze the game on lethal hits
+  if(e.t==='player')return;
   if(e.dead)return;e.dead=1;
   if(e.t==='boss'){
     SFX.die();G.shake=16;
