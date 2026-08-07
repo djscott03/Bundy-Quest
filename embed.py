@@ -128,6 +128,25 @@ def data_url(path):
     return "data:image/jpeg;base64," + base64.b64encode(raw).decode()
 
 
+def title_data_url():
+    """First image in photos/intro/, resized whole (no face crop) for the title screen."""
+    paths = stems("intro")
+    if not paths:
+        return None
+    path = next(iter(sorted(paths.values())))
+    tmp = tempfile.mktemp(suffix=".jpg")
+    subprocess.run(["sips", "-s", "format", "jpeg", path, "--out", tmp],
+                   check=True, capture_output=True)
+    subprocess.run(["sips", "-Z", "560", tmp], check=True, capture_output=True)
+    subprocess.run(["sips", "-s", "formatOptions", str(QUALITY), tmp],
+                   check=True, capture_output=True)
+    with open(tmp, "rb") as f:
+        raw = f.read()
+    os.remove(tmp)
+    print("  title screen: %s" % os.path.basename(path))
+    return "data:image/jpeg;base64," + base64.b64encode(raw).decode()
+
+
 def main():
     allies, villains = stems("bundies"), stems("villains")
 
@@ -150,22 +169,32 @@ def main():
         looks = " + %d more look(s)" % (len(baked[k]) - 1) if len(baked[k]) > 1 else ""
         print("  %-4s %-12s %s%s" % (k, person, os.path.basename(groups[person][0][1]), looks))
 
-    morder = [(s, n) for s, n in MOB_ORDER if s in villains]
-    vorder = [(s, n) for s, n in VILLAIN_ORDER if s in villains]
-    extras = [(s, s.upper()) for s in sorted(villains)
+    # villains group repeat photos into looks exactly like the allies do:
+    # "Spinz (2).jpeg" is another look for Spinz, not a second Spinz
+    vgroups = {}
+    for stem, path in villains.items():
+        vgroups.setdefault(BASE.sub("", stem), []).append((stem, path))
+    for person, items in vgroups.items():
+        pref = PREFERRED.get(person)
+        items.sort(key=lambda sp: (sp[0] != pref, sp[0]))
+
+    morder = [(s, n) for s, n in MOB_ORDER if s in vgroups]
+    vorder = [(s, n) for s, n in VILLAIN_ORDER if s in vgroups]
+    extras = [(s, s.upper()) for s in sorted(vgroups)
               if s not in dict(VILLAIN_ORDER) and s not in dict(MOB_ORDER)]
     vorder[-1:-1] = extras   # new villains slot in BEFORE the final boss — Spinz stays last
     for i, (stem, disp) in enumerate(vorder):
         k = "x%d" % (i + 1)
         bnames[k] = disp
-        baked[k] = [data_url(villains[stem])]
-        print("  %-4s %-12s %s%s" % (k, disp, os.path.basename(villains[stem]),
-                                     "   <- FINAL BOSS" if i == len(vorder) - 1 else ""))
+        baked[k] = [data_url(p) for _, p in vgroups[stem]]
+        looks = " + %d more look(s)" % (len(baked[k]) - 1) if len(baked[k]) > 1 else ""
+        print("  %-4s %-12s %s%s%s" % (k, disp, os.path.basename(vgroups[stem][0][1]), looks,
+                                       "   <- FINAL BOSS" if i == len(vorder) - 1 else ""))
     for i, (stem, disp) in enumerate(morder):
         k = "m%d" % (i + 1)
         bnames[k] = disp
-        baked[k] = [data_url(villains[stem])]
-        print("  %-4s %-12s %s   <- HENCHMAN" % (k, disp, os.path.basename(villains[stem])))
+        baked[k] = [data_url(p) for _, p in vgroups[stem]]
+        print("  %-4s %-12s %s   <- HENCHMAN" % (k, disp, os.path.basename(vgroups[stem][0][1])))
 
     if not baked:
         print("No images found under photos/. Nothing to do.")
@@ -179,6 +208,14 @@ def main():
         html, n = re.subn(r"const %s=\{.*?\};" % name, lambda _: blob, html, count=1, flags=re.S)
         if not n:
             print("Could not find the %s={} marker in bundyquest.html" % name, file=sys.stderr)
+            return 1
+
+    tp = title_data_url()
+    if tp:
+        html, n = re.subn(r'const TITLE_PIC="[^"]*";',
+                          lambda _: 'const TITLE_PIC="%s";' % tp, html, count=1)
+        if not n:
+            print("Could not find the TITLE_PIC marker in bundyquest.html", file=sys.stderr)
             return 1
 
     # keep the slot counts in step with what actually got baked
